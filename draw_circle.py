@@ -5,12 +5,12 @@ import numpy as np
 import cv2 as cv2
 drawing = False  # true if mouse is pressed
 drawEnd = False
+circleCompletionCheck = 512
 img = np.zeros((512, 512, 3), np.uint8)
 circleInputData = []
 
 def worstCaseAssess(radius):
-    n = 2 * radius
-    return 2 * n * (n+1) / 3
+    return (4 * pow(radius , 3) + 3 * pow(radius , 2) + 2 * radius) / (12 * radius + 3)
 
 def circleAssess(circleInput, center, radius):
     sum = 0
@@ -19,7 +19,7 @@ def circleAssess(circleInput, center, radius):
         #print("중심: (", center[0] , center[1],"), 그리고 점: (", point[0], point[1], ")")
         distance = radius - math.sqrt(pow(point[0] - center[0], 2) + pow(point[1] - center[1], 2))
         sum += pow(distance, 2)
-    print("오잉?", sum / len(circleInput))
+    #print("오잉?", sum / len(circleInput))
     return sum / len(circleInput)
     
 def circleInfer(circleInput):
@@ -41,19 +41,22 @@ def circleInfer(circleInput):
     return center, round(UpRadius)       
 
 def paint_draw(event, former_x, former_y, flags, param):
-    global current_former_x, current_former_y, drawing, drawEnd, img, circleInputData
+    global current_former_x, current_former_y, drawing, drawEnd, img, circleInputData, circleCompletionCheck
     if event == cv2.EVENT_LBUTTONDOWN:
+        if drawEnd == True:
+            img = np.zeros((512, 512, 3), np.uint8)
+            drawEnd = False;
+            circleInputData = [];
+            circleCompletionCheck = 512
         drawing = True
         current_former_x, current_former_y = former_x, former_y
         
     elif event == cv2.EVENT_MOUSEMOVE:
         if drawing == True:
-            if drawEnd == True:
-                img = np.zeros((512, 512, 3), np.uint8)
-                drawEnd = False;
-                circleInputData = [];
-            
             circleInputData.append([current_former_x, current_former_y])
+            if len(circleInputData) > 60:
+                circleCompletionCheck = min(circleCompletionCheck, math.sqrt(pow(current_former_x - circleInputData[0][0], 2) + pow(current_former_y - circleInputData[0][1], 2)))
+            #print(circleCompletionCheck)
             
             cv2.line(img, (current_former_x, current_former_y),
                     (former_x, former_y), (0, 0, 255), 5)
@@ -68,12 +71,40 @@ def paint_draw(event, former_x, former_y, flags, param):
         current_former_x = former_x
         current_former_y = former_y
         
+        if len(circleInputData) > 10:
+                circleCompletionCheck = min(circleCompletionCheck, math.sqrt(pow(current_former_x - circleInputData[0][0], 2) + pow(current_former_y - circleInputData[0][1], 2)))
         circleInputData.append([former_x, former_y])
         
         center, radius = circleInfer(circleInputData)
         worstCase = worstCaseAssess(radius)
-        print(worstCase)
-        print("제 점수는요.." , round(worstCase - circleAssess(circleInputData, center, radius) / worstCase , 1), "점!!")
+        inputCase = circleAssess(circleInputData, center, radius)
+        circleCompletionValue = min(1 , pow(19/20 , circleCompletionCheck - 40))
+        #print(worstCase)
+        if radius > 0:
+            circleScore = max(0 , round((worstCase - inputCase) / worstCase * 100 * circleCompletionValue , 1))
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            text = "Score : " + str(circleScore) + " / 100"
+            #print(text)
+            
+            textsize = cv2.getTextSize(text, font, 1, 2)[0]
+            
+            textX = (img.shape[1] - textsize[0]) // 2
+            textY = 50
+            
+            cv2.putText(img, text, (textX, textY), font, 1, (255, 255, 255), 2)
+            print("제 점수는요.." , circleScore , "점!!")
+        else:
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            text = "Draw Circle No Dot ):<"
+            #print(text)
+            
+            textsize = cv2.getTextSize(text, font, 1, 2)[0]
+            
+            textX = (img.shape[1] - textsize[0]) // 2
+            textY = 50
+            
+            cv2.putText(img, text, (textX, textY), font, 1, (255, 255, 255), 2)
+            print("점 말고 원을 그리세요 뭐하시는건가요...")
         cv2.circle(img, center, radius, (255,212,0), 3) 
     return former_x, former_y
 
